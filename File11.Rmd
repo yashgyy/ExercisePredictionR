@@ -1,0 +1,112 @@
+---
+title: "PredictionS"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+
+```{r message=TRUE, warning=FALSE}
+library(caret)
+library(randomForest)
+
+df <- read.csv("pml-training.csv")
+str(df)
+
+```
+
+The Feature or the variable consitiutes to about 160 . Also many feature or variable have factors of abot 340 Levels . Therefore the complexity of dataset is too high to even attempt to model the dataset
+
+
+```{r}
+df[,colSums(is.na(df)) <= 0] -> X
+subset(X,select=-c(min_yaw_forearm,max_yaw_forearm,skewness_pitch_forearm,skewness_roll_forearm,kurtosis_picth_forearm,kurtosis_roll_forearm,max_yaw_dumbbell,min_yaw_dumbbell)) -> X
+subset(X,select=-c(kurtosis_roll_dumbbell,kurtosis_roll_dumbbell, skewness_roll_dumbbell,skewness_pitch_dumbbell, kurtosis_roll_arm,kurtosis_picth_arm,kurtosis_yaw_arm,skewness_roll_arm,skewness_pitch_arm, skewness_yaw_arm))-> X
+
+
+```
+
+
+Continuing to truncate down the Observations or Variables which are Null, have too many levels or does not provide any stastical information to response like timestamp
+
+
+```{r}
+subset(X,select=-c(X))-> X
+subset(X,select=-c(user_name,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp,  yaw_belt, kurtosis_roll_belt,kurtosis_picth_belt, skewness_roll_belt,skewness_roll_belt.1,max_yaw_belt,min_yaw_belt ))-> X
+str(X)
+
+```
+
+ThE Variable or observation now stands at about 64 Variable
+
+However the no of feature or variable are still too high and recursive feature elimination is still need to be used for further eliminating the variables
+
+For feature elimination random function would be used with bootstrap as the sampling. The no of sampled bootstraped is also limited to 2 as no of observation is very high
+
+The reason to choose bootstrap as the model evaluation technique is because the cross validation would be too expensive to compute with 64 predictors. Also bootstrap would give us a reasonable good perfomance considering the large no of observations
+
+```{r}
+subset(X,select=-c(  kurtosis_picth_dumbbell))-> X
+control <- rfeControl(functions=rfFuncs,method = "boot",number = 2)
+results <- rfe(X[,1:62], X[,63],rfeControl=control)
+predictors(results)
+
+```
+
+The rfe have now reduced the no of total possible variables to only 4 which seem to have any effect on response variable
+
+```{r}
+plot(results)
+```
+
+The Plot shows The Accuracy obtained is 0.9990  from 4 predictors which is astouding
+
+To imagine how out of 160 variable only a handful of predictors have any say on response variable is marvellous
+
+
+```{r}
+
+Subset <- subset(X,select=c(num_window,roll_belt,magnet_dumbbell_z,pitch_belt,classe))
+read.csv("pml-testing.csv") -> DF1
+Subset1 <- subset(DF1,select=c(num_window,roll_belt,magnet_dumbbell_z,pitch_belt))
+```
+
+Loading the testing dataset with necessary variables
+
+
+```{r}
+control <- trainControl(method="cv", number=5)
+
+train(classe~.,data=Subset,method = "rf",trainControl=control) -> Training
+
+
+
+```
+
+Here the random forest is used as a training algorithm with cross validation as the evaluation method for model selection. The Random forest in general dosent require any preprocessing and Bagging is able to handle Overfitting. A cross validation of 5 folds is used to evaluate the model , the no of folds is appropriate enough to be in the just in the right position of the bias variance tradeoff.
+
+```{r}
+
+Training
+```
+
+The Accuracy of about 99 percent is marvelous and would expect the same for the out of sample testing errors
+
+```{r}
+
+
+plot(Training)
+```
+
+Above is The tuning process which is done by the caret package as a part of model evaluation on bootstrapped training samples
+
+I would expect the Accuracy to about 99 Percent plus for out of sample errors
+
+```{r}
+predict.train(Training,Subset1)
+
+```
+
+After Validating against the testing data we find the accuracy on it is about 100. This is the best the model can be
+
